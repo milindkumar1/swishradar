@@ -4,13 +4,6 @@ from espn_api.basketball import League
 import os
 import json
 from dotenv import load_dotenv
-from selenium import webdriver
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from webdriver_manager.chrome import ChromeDriverManager
-from selenium.webdriver.chrome.service import Service
-import time
 
 load_dotenv()
 
@@ -19,8 +12,18 @@ CORS(app)
 
 LEAGUE_ID = int(os.getenv('LEAGUE_ID', 1356604871))
 CREDS_FILE = 'espn_credentials.json'
+IS_PRODUCTION = os.getenv('RAILWAY_ENVIRONMENT') is not None
 
 def load_credentials():
+    # In production, use environment variables
+    if IS_PRODUCTION:
+        espn_s2 = os.getenv('ESPN_S2')
+        swid = os.getenv('SWID')
+        if espn_s2 and swid:
+            return {'espn_s2': espn_s2, 'swid': swid}
+        return None
+    
+    # In development, use credentials file
     if os.path.exists(CREDS_FILE):
         try:
             with open(CREDS_FILE, 'r') as f:
@@ -34,63 +37,11 @@ def save_credentials(espn_s2, swid):
         json.dump({'espn_s2': espn_s2, 'swid': swid}, f)
 
 def auto_login_espn():
-    """Open browser and automatically capture ESPN cookies"""
-    try:
-        print("Opening browser for ESPN login...")
-        
-        # Setup Chrome driver
-        options = webdriver.ChromeOptions()
-        options.add_argument('--start-maximized')
-        service = Service(ChromeDriverManager().install())
-        driver = webdriver.Chrome(service=service, options=options)
-        
-        # Navigate to ESPN Fantasy Basketball league
-        driver.get(f"https://fantasy.espn.com/basketball/league?leagueId={LEAGUE_ID}")
-        
-        print("Waiting for you to log in and access your league...")
-        print("IMPORTANT: Make sure you can see your league standings/teams before closing!")
-        
-        # Wait for user to log in and navigate to league (check for cookies AND league page)
-        max_wait = 300  # 5 minutes
-        start_time = time.time()
-        
-        while time.time() - start_time < max_wait:
-            cookies = driver.get_cookies()
-            espn_s2 = None
-            swid = None
-            
-            for cookie in cookies:
-                if cookie['name'] == 'espn_s2':
-                    espn_s2 = cookie['value']
-                elif cookie['name'] == 'SWID':
-                    swid = cookie['value']
-            
-            # Check if we're on the league page (URL contains leagueId)
-            current_url = driver.current_url
-            on_league_page = f"leagueId={LEAGUE_ID}" in current_url
-            
-            if espn_s2 and swid and on_league_page:
-                print(f"SUCCESS! Cookies captured:")
-                print(f"  SWID: {swid[:20]}...")
-                print(f"  ESPN_S2: {espn_s2[:30]}...")
-                save_credentials(espn_s2, swid)
-                
-                # Give user a moment to see success
-                print("Closing browser in 3 seconds...")
-                time.sleep(3)
-                driver.quit()
-                return True, "Successfully logged in!"
-            
-            time.sleep(2)
-        
-        driver.quit()
-        return False, "Timeout - Please make sure you logged in and can see your league page"
-        
-    except Exception as e:
-        print(f"Error during auto-login: {e}")
-        import traceback
-        traceback.print_exc()
-        return False, str(e)
+    """Auto-login disabled in production. Use manual credentials."""
+    if IS_PRODUCTION:
+        return False, "Auto-login not available in production. Please set ESPN_S2 and SWID environment variables."
+    
+    return False, "Auto-login only works in local development with browser access."
 
 def get_league():
     creds = load_credentials()
