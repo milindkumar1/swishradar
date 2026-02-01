@@ -1,0 +1,60 @@
+# Go
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+go.work
+vendor/
+bin/
+dist/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Node.js / Frontend
+node_modules/
+.next/
+out/
+build/
+.turbo/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets
+swid.txt
+espn_s2.txt
+*.pem
+*.key
+
+# Supabase
+.supabase/
+supabase/.branches/
+supabase/.temp/
+
+# Testing
+coverage/
+*.cover
