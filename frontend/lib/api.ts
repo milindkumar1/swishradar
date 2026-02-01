@@ -1,27 +1,52 @@
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8081'
 
-export interface Player {
+export interface LeagueInfo {
   id: number
   name: string
+  year: number
+  size: number
+  current_week: number
+}
+
+export interface TeamOwner {
+  displayName: string
+  firstName: string
+  lastName: string
+  id: string
+}
+
+export interface Player {
+  name: string
   position: string
-  team: string
-  espn_id?: number
+  proTeam: string
+  injured: boolean
 }
 
-export interface StreamingRecommendation {
-  player: Player
-  score: number
-  games_this_week: number
-  projected_value: number
-  trend_delta: number
-  reason: string
+export interface Team {
+  id: number
+  name: string
+  owners: TeamOwner[]
+  wins: number
+  losses: number
+  roster: Player[]
 }
 
-export interface TradeAnalysis {
-  fairness_score: number
-  team1_value_change: number
-  team2_value_change: number
-  winner: string
+export interface Standing {
+  rank: number
+  team_name: string
+  owners: TeamOwner[]
+  wins: number
+  losses: number
+  points_for: number
+  points_against: number
+}
+
+export interface FreeAgent {
+  name: string
+  position: string
+  proTeam: string
+  avg_points: number
+  total_points: number
 }
 
 class ApiClient {
@@ -48,25 +73,33 @@ class ApiClient {
     return response.json()
   }
 
-  // League endpoints
-  async getLeague() {
-    return this.request('/api/v1/espn/league')
+  // ESPN endpoints
+  async getESPNHealth() {
+    return this.request('/api/espn/health')
   }
 
-  async getTeams() {
-    return this.request('/api/v1/espn/teams')
+  async getLeague(): Promise<LeagueInfo> {
+    return this.request('/api/espn/league')
   }
 
-  async syncLeague() {
-    return this.request('/api/v1/espn/sync', { method: 'POST' })
+  async getTeams(): Promise<{ teams: Team[] }> {
+    return this.request('/api/espn/teams')
   }
 
-  // Analytics endpoints
-  async getStreamingRecommendations(): Promise<StreamingRecommendation[]> {
+  async getStandings(): Promise<{ standings: Standing[] }> {
+    return this.request('/api/espn/standings')
+  }
+
+  async getFreeAgents(limit: number = 50): Promise<{ players: FreeAgent[] }> {
+    return this.request(`/api/espn/free-agents?limit=${limit}`)
+  }
+
+  // Analytics endpoints (coming soon)
+  async getStreamingRecommendations() {
     return this.request('/api/v1/analytics/streaming')
   }
 
-  async calculateTrade(team1Players: number[], team2Players: number[]): Promise<TradeAnalysis> {
+  async calculateTrade(team1Players: number[], team2Players: number[]) {
     return this.request('/api/v1/analytics/trade', {
       method: 'POST',
       body: JSON.stringify({ team1_players: team1Players, team2_players: team2Players }),
@@ -96,3 +129,4 @@ class ApiClient {
 }
 
 export const apiClient = new ApiClient(API_BASE_URL)
+export const api = apiClient

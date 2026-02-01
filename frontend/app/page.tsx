@@ -5,7 +5,7 @@ export default function Home() {
         {/* Hero Section */}
         <div className="text-center mb-16">
           <h1 className="text-6xl font-bold text-white mb-4">
-            🏀 SwishRadar
+            SwishRadar
           </h1>
           <p className="text-xl text-gray-300 mb-8">
             Advanced Analytics for ESPN Fantasy Basketball
@@ -15,13 +15,15 @@ export default function Home() {
               href="/dashboard"
               className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-lg transition-colors"
             >
-              Get Started
+              View Dashboard
             </a>
             <a
-              href="/docs"
-              className="bg-gray-700 hover:bg-gray-600 text-white font-bold py-3 px-8 rounded-lg transition-colors"
+              href="http://localhost:5001"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-8 rounded-lg transition-colors"
             >
-              Documentation
+              Login to ESPN
             </a>
           </div>
         </div>

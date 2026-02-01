@@ -1,53 +1,111 @@
-# 🏀 SwishRadar
+# SwishRadar# SwishRadar
 
-**The ultimate fantasy basketball analytics platform for ESPN leagues**
 
-SwishRadar provides advanced analytics, waiver wire recommendations, trade calculators, and power rankings for your ESPN Fantasy Basketball league — all powered by real-time data and backtested algorithms.
 
----
+Fantasy basketball analytics platform for ESPN leagues.Fantasy basketball analytics platform for ESPN leagues.
 
-## 🎯 Features
 
-### Core Analytics
-- **🔄 Trade Calculator** - Evaluate trade fairness with multi-category analysis and positional scarcity
-- **📊 Waiver Wire Engine** - Smart streaming recommendations based on games played, trends, and opportunity
-- **🏆 Power Rankings** - Monte Carlo simulations for playoff odds and weekly matchup predictions
-- **📈 Backtesting** - Validate algorithm accuracy against historical data
 
-### Integrations
-- **ESPN League Sync** - Real-time roster, matchup, and waiver wire data
-- **Discord Bot** - Daily insights, matchup previews, and command-based queries
-- **Custom Domain** - Hosted on your own domain for free
+## Quick Start## Quick Start
 
----
 
-## 🏗️ Architecture
 
-```
-┌─────────────────────────────┐
-│    Next.js Frontend         │
-│    (Vercel/Supabase)        │
-└──────────┬──────────────────┘
-           │
-┌──────────▼──────────────────┐
-│    Go Backend API           │
-│    (Railway/Fly.io)         │
-└──────────┬──────────────────┘
-           │
-┌──────────▼──────────────────┐
-│    Supabase PostgreSQL      │
-│    - League data            │
-│    - Player stats           │
-│    - Backtesting results    │
-└─────────────────────────────┘
-```
+### 1. Start All Services### 1. Start All Services
 
-### Data Sources (All Free!)
-- ESPN Fantasy API (unofficial)
-- NBA Stats API (official, no key required)
-- Basketball Reference (optional scraping)
 
----
+
+```powershell```powershell
+
+# Terminal 1 - ESPN Service# Terminal 1 - ESPN Service
+
+cd espn-servicecd espn-service
+
+.\venv\Scripts\python.exe app.py.\venv\Scripts\python.exe app.py
+
+
+
+# Terminal 2 - Backend API  # Terminal 2 - Backend API  
+
+cd backendcd backend
+
+go run cmd/api/main.gogo run cmd/api/main.go
+
+
+
+# Terminal 3 - Frontend# Terminal 3 - Frontend
+
+cd frontendcd frontend
+
+npm run devnpm run dev
+
+``````
+
+
+
+### 2. Login to ESPN### 2. Login to ESPN
+
+
+
+Go to http://localhost:5001 and click "Login with ESPN (Easy Way)"Go to http://localhost:5001 and click "Login with ESPN (Easy Way)"
+
+
+
+### 3. View Dashboard### 3. View Dashboard
+
+
+
+Go to http://localhost:3000/dashboardGo to http://localhost:3000/dashboard
+
+
+
+## Services## Services
+
+
+
+- **Frontend**: http://localhost:3000 (Next.js)- **Frontend**: http://localhost:3000 (Next.js)
+
+- **Backend API**: http://localhost:8081 (Go)- **Backend API**: http://localhost:8081 (Go)
+
+- **ESPN Service**: http://localhost:5001 (Python/Flask)- **ESPN Service**: http://localhost:5001 (Python/Flask)
+
+
+
+## Features## Features
+
+
+
+- Real-time league standings- Real-time league standings
+
+- Team rosters and player stats- Team rosters and player stats
+
+- Free agent recommendations- Free agent recommendations
+
+- Auto-login with ESPN (no cookie copying needed)- Auto-login with ESPN (no cookie copying needed)
+
+
+
+## Tech Stack## Tech Stack
+
+
+
+- Next.js 14 (React, TypeScript, Tailwind)- Next.js 14 (React, TypeScript, Tailwind)
+
+- Go 1.21+ (Chi router)- Go 1.21+ (Chi router)
+
+- Python 3.13 (Flask, espn-api v0.45.1)- Python 3.13 (Flask, espn-api v0.45.1)
+
+
+
+## Stop Services## Stop Services
+
+
+
+```powershell```powershell
+
+Get-Process python,node,go | Where-Object {$_.Path -like "*nbafantasy*"} | Stop-ProcessGet-Process python,node,go | Where-Object {$_.Path -like "*nbafantasy*"} | Stop-Process
+
+``````
+
 
 ## 🚀 Quick Start
 

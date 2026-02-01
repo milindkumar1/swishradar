@@ -16,6 +16,9 @@ dist/
 .env.local
 .env.*.local
 
+# ESPN credentials
+espn-service/espn_credentials.json
+
 # IDE
 .vscode/
 .idea/

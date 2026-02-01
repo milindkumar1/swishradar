@@ -3,17 +3,16 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
-	"strconv"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
 	"github.com/joho/godotenv"
-	"github.com/milindkumar1/swishradar/internal/espn"
 )
 
 func main() {
@@ -39,9 +38,15 @@ func main() {
 		MaxAge:           300,
 	}))
 
+	// ESPN Service URL
+	espnServiceURL := os.Getenv("ESPN_SERVICE_URL")
+	if espnServiceURL == "" {
+		espnServiceURL = "http://localhost:5001"
+	}
+
 	// Routes
 	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("🏀 SwishRadar API v1.0"))
+		w.Write([]byte("SwishRadar API v1.0"))
 	})
 
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
@@ -52,12 +57,32 @@ func main() {
 		})
 	})
 
-	// ESPN API routes
-	r.Get("/api/league", getLeagueHandler)
-	r.Get("/api/league/teams", getTeamsHandler)
-	r.Get("/api/league/free-agents", getFreeAgentsHandler)
+	// ESPN Service proxy routes
+	r.Get("/api/espn/health", func(w http.ResponseWriter, r *http.Request) {
+		proxyRequest(w, r, espnServiceURL+"/health")
+	})
 
-	// API v1 routes (future endpoints)
+	r.Get("/api/espn/league", func(w http.ResponseWriter, r *http.Request) {
+		proxyRequest(w, r, espnServiceURL+"/api/league")
+	})
+
+	r.Get("/api/espn/teams", func(w http.ResponseWriter, r *http.Request) {
+		proxyRequest(w, r, espnServiceURL+"/api/teams")
+	})
+
+	r.Get("/api/espn/free-agents", func(w http.ResponseWriter, r *http.Request) {
+		url := espnServiceURL + "/api/free-agents"
+		if r.URL.RawQuery != "" {
+			url += "?" + r.URL.RawQuery
+		}
+		proxyRequest(w, r, url)
+	})
+
+	r.Get("/api/espn/standings", func(w http.ResponseWriter, r *http.Request) {
+		proxyRequest(w, r, espnServiceURL+"/api/standings")
+	})
+
+	// API v1 routes (future analytics endpoints)
 	r.Route("/api/v1", func(r chi.Router) {
 		// Analytics routes
 		r.Route("/analytics", func(r chi.Router) {
@@ -87,129 +112,79 @@ func main() {
 		port = "8081"
 	}
 
-	fmt.Printf("🚀 SwishRadar API starting on port %s\n", port)
+	fmt.Printf("SwishRadar API starting on port %s\n", port)
+	fmt.Printf("ESPN Service: %s\n", espnServiceURL)
 	if err := http.ListenAndServe(":"+port, r); err != nil {
 		log.Fatal(err)
 	}
 }
 
-// ESPN League Handlers
-func getLeagueHandler(w http.ResponseWriter, r *http.Request) {
-	client := createESPNClient()
-
-	league, err := client.GetLeague()
+// Proxy helper function
+func proxyRequest(w http.ResponseWriter, r *http.Request, targetURL string) {
+	resp, err := http.Get(targetURL)
 	if err != nil {
-		log.Printf("Error fetching league: %v", err)
-		http.Error(w, fmt.Sprintf("Failed to fetch league: %v", err), http.StatusInternalServerError)
+		log.Printf("Error proxying request to %s: %v", targetURL, err)
+		http.Error(w, fmt.Sprintf("Failed to connect to ESPN service: %v", err), http.StatusBadGateway)
 		return
 	}
+	defer resp.Body.Close()
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(league)
-}
-
-func getTeamsHandler(w http.ResponseWriter, r *http.Request) {
-	client := createESPNClient()
-
-	league, err := client.GetLeague()
-	if err != nil {
-		log.Printf("Error fetching teams: %v", err)
-		http.Error(w, fmt.Sprintf("Failed to fetch teams: %v", err), http.StatusInternalServerError)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"teams": league.Teams,
-		"count": len(league.Teams),
-	})
-}
-
-func getFreeAgentsHandler(w http.ResponseWriter, r *http.Request) {
-	client := createESPNClient()
-
-	limitStr := r.URL.Query().Get("limit")
-	limit := 50
-	if limitStr != "" {
-		if l, err := strconv.Atoi(limitStr); err == nil {
-			limit = l
+	// Copy headers
+	for key, values := range resp.Header {
+		for _, value := range values {
+			w.Header().Add(key, value)
 		}
 	}
 
-	players, err := client.GetFreeAgents(limit)
-	if err != nil {
-		log.Printf("Error fetching free agents: %v", err)
-		http.Error(w, fmt.Sprintf("Failed to fetch free agents: %v", err), http.StatusInternalServerError)
-		return
-	}
+	// Copy status code
+	w.WriteHeader(resp.StatusCode)
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"players": players,
-		"count":   len(players),
-	})
+	// Copy body
+	io.Copy(w, resp.Body)
 }
 
-func createESPNClient() *espn.Client {
-	leagueID := os.Getenv("ESPN_LEAGUE_ID")
-	swid := os.Getenv("ESPN_SWID")
-	s2 := os.Getenv("ESPN_S2")
-	
-	// Get current season (2025 for now)
-	season := 2025
-	
-	return espn.NewClient(leagueID, season, swid, s2)
-}
-
-// Placeholder handlers - to be implemented
-func handleGetLeague(w http.ResponseWriter, r *http.Request) {
-	w.Write([]byte(`{"message": "League data endpoint - coming soon"}`))
-}
-
-func handleGetTeams(w http.ResponseWriter, r *http.Request) {
-	w.Write([]byte(`{"message": "Teams endpoint - coming soon"}`))
-}
-
-func handleGetWaiverWire(w http.ResponseWriter, r *http.Request) {
-	w.Write([]byte(`{"message": "Waiver wire endpoint - coming soon"}`))
-}
-
-func handleSyncLeague(w http.ResponseWriter, r *http.Request) {
-	w.Write([]byte(`{"message": "Sync endpoint - coming soon"}`))
-}
-
+// Placeholder handlers for future analytics features
 func handleGetStreamingRecommendations(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
 	w.Write([]byte(`{"message": "Streaming recommendations - coming soon"}`))
 }
 
 func handleCalculateTrade(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
 	w.Write([]byte(`{"message": "Trade calculator - coming soon"}`))
 }
 
 func handleGetPowerRankings(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
 	w.Write([]byte(`{"message": "Power rankings - coming soon"}`))
 }
 
 func handleGetMatchupPrediction(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
 	w.Write([]byte(`{"message": "Matchup prediction - coming soon"}`))
 }
 
 func handleGetPlayers(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
 	w.Write([]byte(`{"message": "Players list - coming soon"}`))
 }
 
 func handleGetPlayer(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
 	w.Write([]byte(`{"message": "Player details - coming soon"}`))
 }
 
 func handleGetPlayerStats(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
 	w.Write([]byte(`{"message": "Player stats - coming soon"}`))
 }
 
 func handleRunBacktest(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
 	w.Write([]byte(`{"message": "Backtest runner - coming soon"}`))
 }
 
 func handleGetBacktestResults(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
 	w.Write([]byte(`{"message": "Backtest results - coming soon"}`))
 }
