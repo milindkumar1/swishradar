@@ -10,62 +10,88 @@ import (
 
 // Client handles ESPN Fantasy API requests
 type Client struct {
-	SWID     string
-	S2       string
 	LeagueID string
 	Season   int
+	SWID     string
+	S2       string
 	client   *http.Client
 }
 
 // NewClient creates a new ESPN API client
-func NewClient(swid, s2, leagueID string, season int) *Client {
+func NewClient(leagueID string, season int, swid, s2 string) *Client {
 	return &Client{
-		SWID:     swid,
-		S2:       s2,
 		LeagueID: leagueID,
 		Season:   season,
+		SWID:     swid,
+		S2:       s2,
 		client: &http.Client{
 			Timeout: 30 * time.Second,
 		},
 	}
 }
 
-// LeagueResponse represents the ESPN league response
-type LeagueResponse struct {
+// League represents the ESPN league data
+type League struct {
 	ID       int    `json:"id"`
 	Name     string `json:"name"`
+	Size     int    `json:"size"`
 	Season   int    `json:"seasonId"`
 	Settings struct {
-		ScoringSettings struct {
-			ScoringItems []struct {
-				StatID        int     `json:"statId"`
-				Points        float64 `json:"points"`
-				PointsOverride float64 `json:"pointsOverride"`
-			} `json:"scoringItems"`
-		} `json:"scoringSettings"`
+		Name                string          `json:"name"`
+		ScoringSettings     json.RawMessage `json:"scoringSettings"`
+		RosterSettings      json.RawMessage `json:"rosterSettings"`
 	} `json:"settings"`
-	Teams []struct {
-		ID       int    `json:"id"`
-		Location string `json:"location"`
-		Nickname string `json:"nickname"`
-		Roster   struct {
-			Entries []struct {
-				PlayerPoolEntry struct {
-					Player struct {
-						ID        int    `json:"id"`
-						FullName  string `json:"fullName"`
-						ProTeamID int    `json:"proTeamId"`
-					} `json:"player"`
-				} `json:"playerPoolEntry"`
-			} `json:"entries"`
-		} `json:"roster"`
-	} `json:"teams"`
+	Teams   []Team   `json:"teams"`
+	Members []Member `json:"members"`
+}
+
+type Team struct {
+	ID           int    `json:"id"`
+	Abbrev       string `json:"abbrev"`
+	Name         string `json:"name"`
+	Location     string `json:"location"`
+	Nickname     string `json:"nickname"`
+	PrimaryOwner string `json:"primaryOwner"`
+	Roster       struct {
+		Entries []RosterEntry `json:"entries"`
+	} `json:"roster"`
+	Record struct {
+		Overall struct {
+			Wins   int `json:"wins"`
+			Losses int `json:"losses"`
+			Ties   int `json:"ties"`
+		} `json:"overall"`
+	} `json:"record"`
+}
+
+type RosterEntry struct {
+	PlayerPoolEntry struct {
+		Player Player `json:"player"`
+	} `json:"playerPoolEntry"`
+	LineupSlotId int `json:"lineupSlotId"`
+}
+
+type Player struct {
+	ID               int    `json:"id"`
+	FullName         string `json:"fullName"`
+	FirstName        string `json:"firstName"`
+	LastName         string `json:"lastName"`
+	DefaultPositionId int   `json:"defaultPositionId"`
+	ProTeamId        int    `json:"proTeamId"`
+	Injured          bool   `json:"injured"`
+	InjuryStatus     string `json:"injuryStatus"`
+}
+
+type Member struct {
+	ID              string `json:"id"`
+	DisplayName     string `json:"displayName"`
+	IsLeagueManager bool   `json:"isLeagueManager"`
 }
 
 // GetLeague fetches league information from ESPN
-func (c *Client) GetLeague() (*LeagueResponse, error) {
+func (c *Client) GetLeague() (*League, error) {
 	url := fmt.Sprintf(
-		"https://fantasy.espn.com/apis/v3/games/fba/seasons/%d/segments/0/leagues/%s",
+		"https://fantasy.espn.com/apis/v3/games/fba/seasons/%d/segments/0/leagues/%s?view=mTeam&view=mRoster&view=mSettings",
 		c.Season,
 		c.LeagueID,
 	)
@@ -76,16 +102,8 @@ func (c *Client) GetLeague() (*LeagueResponse, error) {
 	}
 
 	// Add ESPN authentication cookies
-	req.AddCookie(&http.Cookie{Name: "swid", Value: c.SWID})
+	req.AddCookie(&http.Cookie{Name: "SWID", Value: c.SWID})
 	req.AddCookie(&http.Cookie{Name: "espn_s2", Value: c.S2})
-
-	// Add query parameters for more data
-	q := req.URL.Query()
-	q.Add("view", "mTeam")
-	q.Add("view", "mRoster")
-	q.Add("view", "mMatchup")
-	q.Add("view", "mSettings")
-	req.URL.RawQuery = q.Encode()
 
 	resp, err := c.client.Do(req)
 	if err != nil {
@@ -95,21 +113,21 @@ func (c *Client) GetLeague() (*LeagueResponse, error) {
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("ESPN API error: %d - %s", resp.StatusCode, string(body))
+		return nil, fmt.Errorf("ESPN API returned status %d: %s", resp.StatusCode, string(body))
 	}
 
-	var leagueResp LeagueResponse
-	if err := json.NewDecoder(resp.Body).Decode(&leagueResp); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
+	var league League
+	if err := json.NewDecoder(resp.Body).Decode(&league); err != nil {
+		return nil, fmt.Errorf("failed to decode league data: %w", err)
 	}
 
-	return &leagueResp, nil
+	return &league, nil
 }
 
 // GetFreeAgents fetches available free agents
-func (c *Client) GetFreeAgents(limit int) ([]interface{}, error) {
+func (c *Client) GetFreeAgents(limit int) ([]Player, error) {
 	url := fmt.Sprintf(
-		"https://fantasy.espn.com/apis/v3/games/fba/seasons/%d/segments/0/leagues/%s",
+		"https://fantasy.espn.com/apis/v3/games/fba/seasons/%d/segments/0/leagues/%s?view=kona_player_info",
 		c.Season,
 		c.LeagueID,
 	)
@@ -119,16 +137,8 @@ func (c *Client) GetFreeAgents(limit int) ([]interface{}, error) {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
-	req.AddCookie(&http.Cookie{Name: "swid", Value: c.SWID})
+	req.AddCookie(&http.Cookie{Name: "SWID", Value: c.SWID})
 	req.AddCookie(&http.Cookie{Name: "espn_s2", Value: c.S2})
-
-	q := req.URL.Query()
-	q.Add("view", "kona_player_info")
-	q.Add("scoringPeriodId", "0")
-	if limit > 0 {
-		q.Add("limit", fmt.Sprintf("%d", limit))
-	}
-	req.URL.RawQuery = q.Encode()
 
 	resp, err := c.client.Do(req)
 	if err != nil {
@@ -137,15 +147,26 @@ func (c *Client) GetFreeAgents(limit int) ([]interface{}, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("ESPN API error: %d", resp.StatusCode)
+		return nil, fmt.Errorf("ESPN API returned status %d", resp.StatusCode)
 	}
 
-	var result map[string]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
+	var data struct {
+		Players []struct {
+			Player Player `json:"player"`
+		} `json:"players"`
 	}
 
-	// Extract free agents from response
-	// This is a placeholder - actual structure may vary
-	return []interface{}{}, nil
+	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
+		return nil, fmt.Errorf("failed to decode free agents: %w", err)
+	}
+
+	players := make([]Player, 0, len(data.Players))
+	for _, p := range data.Players {
+		players = append(players, p.Player)
+		if len(players) >= limit {
+			break
+		}
+	}
+
+	return players, nil
 }

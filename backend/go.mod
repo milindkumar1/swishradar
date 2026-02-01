@@ -1,4 +1,4 @@
-module github.com/yourusername/swishradar
+module github.com/milindkumar1/swishradar
 
 go 1.21
 

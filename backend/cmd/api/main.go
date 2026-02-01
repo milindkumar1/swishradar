@@ -1,15 +1,19 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
+	"strconv"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
 	"github.com/joho/godotenv"
+	"github.com/milindkumar1/swishradar/internal/espn"
 )
 
 func main() {
@@ -24,8 +28,10 @@ func main() {
 	// Middleware
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
+	r.Use(middleware.RequestID)
+	r.Use(middleware.RealIP)
 	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   []string{"http://localhost:3000", "https://*"},
+		AllowedOrigins:   []string{"http://localhost:3000", "http://localhost:3001"},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type"},
 		ExposedHeaders:   []string{"Link"},
@@ -39,20 +45,20 @@ func main() {
 	})
 
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"status": "healthy"}`))
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"status":    "healthy",
+			"timestamp": time.Now(),
+		})
 	})
 
-	// API v1 routes
-	r.Route("/api/v1", func(r chi.Router) {
-		// ESPN sync routes
-		r.Route("/espn", func(r chi.Router) {
-			r.Get("/league", handleGetLeague)
-			r.Get("/teams", handleGetTeams)
-			r.Get("/waiver-wire", handleGetWaiverWire)
-			r.Post("/sync", handleSyncLeague)
-		})
+	// ESPN API routes
+	r.Get("/api/league", getLeagueHandler)
+	r.Get("/api/league/teams", getTeamsHandler)
+	r.Get("/api/league/free-agents", getFreeAgentsHandler)
 
+	// API v1 routes (future endpoints)
+	r.Route("/api/v1", func(r chi.Router) {
 		// Analytics routes
 		r.Route("/analytics", func(r chi.Router) {
 			r.Get("/streaming", handleGetStreamingRecommendations)
@@ -78,13 +84,81 @@ func main() {
 	// Start server
 	port := os.Getenv("PORT")
 	if port == "" {
-		port = "8080"
+		port = "8081"
 	}
 
 	fmt.Printf("🚀 SwishRadar API starting on port %s\n", port)
 	if err := http.ListenAndServe(":"+port, r); err != nil {
 		log.Fatal(err)
 	}
+}
+
+// ESPN League Handlers
+func getLeagueHandler(w http.ResponseWriter, r *http.Request) {
+	client := createESPNClient()
+
+	league, err := client.GetLeague()
+	if err != nil {
+		log.Printf("Error fetching league: %v", err)
+		http.Error(w, fmt.Sprintf("Failed to fetch league: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(league)
+}
+
+func getTeamsHandler(w http.ResponseWriter, r *http.Request) {
+	client := createESPNClient()
+
+	league, err := client.GetLeague()
+	if err != nil {
+		log.Printf("Error fetching teams: %v", err)
+		http.Error(w, fmt.Sprintf("Failed to fetch teams: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"teams": league.Teams,
+		"count": len(league.Teams),
+	})
+}
+
+func getFreeAgentsHandler(w http.ResponseWriter, r *http.Request) {
+	client := createESPNClient()
+
+	limitStr := r.URL.Query().Get("limit")
+	limit := 50
+	if limitStr != "" {
+		if l, err := strconv.Atoi(limitStr); err == nil {
+			limit = l
+		}
+	}
+
+	players, err := client.GetFreeAgents(limit)
+	if err != nil {
+		log.Printf("Error fetching free agents: %v", err)
+		http.Error(w, fmt.Sprintf("Failed to fetch free agents: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"players": players,
+		"count":   len(players),
+	})
+}
+
+func createESPNClient() *espn.Client {
+	leagueID := os.Getenv("ESPN_LEAGUE_ID")
+	swid := os.Getenv("ESPN_SWID")
+	s2 := os.Getenv("ESPN_S2")
+	
+	// Get current season (2025 for now)
+	season := 2025
+	
+	return espn.NewClient(leagueID, season, swid, s2)
 }
 
 // Placeholder handlers - to be implemented
